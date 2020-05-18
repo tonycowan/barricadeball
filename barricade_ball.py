@@ -14,14 +14,27 @@ import math
 
 CANVAS_WIDTH = 800  # Width of drawing canvas in pixels
 CANVAS_HEIGHT = 600  # Height of drawing canvas in pixels
+HEADER_HEIGHT = 40
+PLAYER_1_SCORE_OFFSET_X = CANVAS_WIDTH // 4
+PLAYER_2_SCORE_OFFSET_X = CANVAS_WIDTH * 3 / 4
+HEADER_TEXT_OFFSET_Y = HEADER_HEIGHT // 2
+SCORE_TEXT = 'LIVES: '
+PLAY_AREA_HEIGHT = CANVAS_HEIGHT - HEADER_HEIGHT
+PLAY_AREA_WIDTH = CANVAS_WIDTH
+PLAY_AREA_OFFSET_Y = HEADER_HEIGHT
+PLAY_AREA_OFFSET_X = 0
+PLAY_AREA_LEFT = PLAY_AREA_OFFSET_X
+PLAY_AREA_RIGHT = PLAY_AREA_LEFT + PLAY_AREA_WIDTH
+PLAY_AREA_TOP = PLAY_AREA_OFFSET_Y
+PLAY_AREA_BOTTOM = PLAY_AREA_TOP + PLAY_AREA_HEIGHT
 PLAYER_COUNT = 2
 SPACE_BETWEEN_BARRIERS = 3
 BARRIER_COLUMN_COUNT_PER_PLAYER = 4
 SPACE_BETWEEN_BARRIER_COLUMNS = 3
 BARRIER_COUNT_PER_COLUMN = 10
 BARRIER_WIDTH = 10
-BARRIER_HEIGHT = ((CANVAS_HEIGHT - SPACE_BETWEEN_BARRIERS) // BARRIER_COUNT_PER_COLUMN) - SPACE_BETWEEN_BARRIERS
-SPACE_ABOVE_AND_BELOW_BARRIERS = (CANVAS_HEIGHT - (
+BARRIER_HEIGHT = ((PLAY_AREA_HEIGHT - SPACE_BETWEEN_BARRIERS) // BARRIER_COUNT_PER_COLUMN) - SPACE_BETWEEN_BARRIERS
+SPACE_ABOVE_AND_BELOW_BARRIERS = (PLAY_AREA_HEIGHT - (
         BARRIER_COUNT_PER_COLUMN * (BARRIER_HEIGHT + SPACE_BETWEEN_BARRIERS) - SPACE_BETWEEN_BARRIERS)) // 2
 PLAYER_2_COLOR = '#ff4d4d'
 PLAYER_1_COLOR = '#668cff'
@@ -29,17 +42,17 @@ PADDLE_HEIGHT = 60
 PADDLE_WIDTH = 30
 PADDLE_OFFSET = 10
 PLAYER_1_PADDLE_X = PADDLE_OFFSET
-PLAYER_2_PADDLE_X = CANVAS_WIDTH - PADDLE_OFFSET - PADDLE_WIDTH
+PLAYER_2_PADDLE_X = PLAY_AREA_RIGHT - PADDLE_OFFSET - PADDLE_WIDTH
 PLAYER_1_PADDLE_UP_KEY = 'q'
 PLAYER_1_PADDLE_DOWN_KEY = 'a'
 PLAYER_2_PADDLE_UP_KEY = ']'
 PLAYER_2_PADDLE_DOWN_KEY = "'"
 VALID_KEYS = [PLAYER_1_PADDLE_UP_KEY, PLAYER_1_PADDLE_DOWN_KEY, PLAYER_2_PADDLE_UP_KEY, PLAYER_2_PADDLE_DOWN_KEY]
 PADDLE_MOVE_STEP = 5
-PADDLE_MIN_Y = PADDLE_HEIGHT // 2
-PADDLE_MAX_Y = CANVAS_HEIGHT - PADDLE_HEIGHT // 2
+PADDLE_MIN_Y = PLAY_AREA_TOP + PADDLE_HEIGHT // 2
+PADDLE_MAX_Y = PLAY_AREA_BOTTOM - PADDLE_HEIGHT // 2
 BALL_INITIAL_X_OFFSET = 100
-BALL_INITIAL_Y_OFFSET = CANVAS_HEIGHT // 2
+BALL_INITIAL_Y_OFFSET = PLAY_AREA_HEIGHT // 2
 BALL_VELOCITY = 5
 BALL_RADIUS = 20
 BALL_COLOR_PLAYER_1 = '#668cff'
@@ -76,26 +89,35 @@ def create_keyboard_handler(game_state):
             if event.char == PLAYER_2_PADDLE_DOWN_KEY and paddle['move_direction'] != 'down': direction = 'down'
             paddle['move_direction'] = direction
 
-        print(tkinter.EventType.KeyRelease)
-        print("event: " + repr(event.type) + ', char: ' + repr(event.char) + ', keysym: ' + repr(
-            event.keysym) + ', keycode: ' + repr(event.keycode))
-
-        print('p1: ' + str(game_state['paddles'][0]['move_direction']) + 'p2: ' + str(
-            game_state['paddles'][1]['move_direction']))
-
     return keyboard_handler
 
 
 def initialize(canvas):
     game_state = {'barriers': initialize_barriers(canvas),
                   'paddles': initialize_paddles(canvas),
-                  'balls': initialize_balls(canvas)}
+                  'balls': initialize_balls(canvas),
+                  'scores': initialize_header(canvas)}
 
     return game_state
 
 
+def create_score_for_player(player, canvas, lives):
+    x_offset = PLAYER_1_SCORE_OFFSET_X if player == 1 else PLAYER_2_SCORE_OFFSET_X
+    return canvas.create_text(x_offset, HEADER_TEXT_OFFSET_Y, text=SCORE_TEXT + str(lives))
+
+
+def initialize_header(canvas):
+    scores = [{'player':1, 'lives':10},{'player':2, 'lives':10}]
+    canvas.create_line(PLAY_AREA_LEFT, PLAY_AREA_TOP, PLAY_AREA_RIGHT, PLAY_AREA_TOP, fill='#101010')
+    for score in scores:
+        player = score['player']
+        lives = score['lives']
+        score['item'] = create_score_for_player(player, canvas, lives)
+    return scores
+
+
 def new_ball_direction(player):
-    max_angle = math.atan(CANVAS_HEIGHT / CANVAS_WIDTH)
+    max_angle = math.atan(PLAY_AREA_HEIGHT / PLAY_AREA_WIDTH)
     rand = random.randint(-1000, 1000)
     random_angle = rand * max_angle / 1000
     x_step = BALL_VELOCITY * math.cos(random_angle)
@@ -106,21 +128,23 @@ def new_ball_direction(player):
 
     return {'x_step': x_step, 'y_step': y_step}
 
+
 def initialize_ball(ball, canvas):
     player = ball['player']
     ball_direction = new_ball_direction(player)
     if player == 1:
-        ball['x']= BALL_INITIAL_X_OFFSET
+        ball['x'] = PLAY_AREA_LEFT + BALL_INITIAL_X_OFFSET
     if player == 2:
-        ball['x'] = CANVAS_WIDTH - BALL_INITIAL_X_OFFSET
+        ball['x'] = PLAY_AREA_RIGHT - BALL_INITIAL_X_OFFSET
 
-    ball['y'] = BALL_INITIAL_Y_OFFSET
+    ball['y'] = PLAY_AREA_TOP + BALL_INITIAL_Y_OFFSET
     ball['x_step'] = ball_direction['x_step']
     ball['y_step'] = ball_direction['y_step']
 
     color = BALL_COLOR_PLAYER_1 if ball['player'] == 1 else BALL_COLOR_PLAYER_2
     ball['item'] = canvas.create_oval(ball['x'] - BALL_RADIUS, ball['y'] - BALL_RADIUS, ball['x'] + BALL_RADIUS,
-                                          ball['y'] + BALL_RADIUS, fill=color, outline=color)
+                                      ball['y'] + BALL_RADIUS, fill=color, outline=color)
+
 
 def initialize_balls(canvas):
     balls = [{'player': 1},
@@ -135,14 +159,11 @@ def initialize_balls(canvas):
 def initialize_barriers(canvas):
     width_of_all_barrier_columns = PLAYER_COUNT * BARRIER_COLUMN_COUNT_PER_PLAYER * (
             BARRIER_WIDTH + SPACE_BETWEEN_BARRIER_COLUMNS) - SPACE_BETWEEN_BARRIER_COLUMNS
-    starting_x_of_barriers = (CANVAS_WIDTH - width_of_all_barrier_columns) // 2
-    starting_y_of_barriers = SPACE_ABOVE_AND_BELOW_BARRIERS
-    print('SPACE_ABOVE_AND_BELOW_BARRIERS: ', str(SPACE_ABOVE_AND_BELOW_BARRIERS))
-    print('BARRIER_HEIGHT: ', str(BARRIER_HEIGHT))
+    starting_x_of_barriers = PLAY_AREA_LEFT + (PLAY_AREA_WIDTH - width_of_all_barrier_columns) // 2
+    starting_y_of_barriers = PLAY_AREA_TOP + SPACE_ABOVE_AND_BELOW_BARRIERS
     barriers = []
     for i in range(PLAYER_COUNT * BARRIER_COLUMN_COUNT_PER_PLAYER):
         even = ((i % 2) == 0)
-        print(str(i % 2) + ' : ' + str(((i % 2) == 0)))
         x = starting_x_of_barriers + i * (BARRIER_WIDTH + SPACE_BETWEEN_BARRIER_COLUMNS)
         for j in range(BARRIER_COUNT_PER_COLUMN):
             y = starting_y_of_barriers + j * (BARRIER_HEIGHT + SPACE_BETWEEN_BARRIERS)
@@ -157,8 +178,9 @@ def initialize_barriers(canvas):
 
 
 def initialize_paddles(canvas):
-    paddles = [{'x': PLAYER_1_PADDLE_X, 'y': CANVAS_HEIGHT // 2, 'player': 1, 'move_direction': 'none'},
-               {'x': PLAYER_2_PADDLE_X, 'y': CANVAS_HEIGHT // 2, 'player': 2, 'move_direction': 'none'}]
+    paddles = [
+        {'x': PLAYER_1_PADDLE_X, 'y': PLAY_AREA_TOP + PLAY_AREA_HEIGHT // 2, 'player': 1, 'move_direction': 'none'},
+        {'x': PLAYER_2_PADDLE_X, 'y': PLAY_AREA_TOP + PLAY_AREA_HEIGHT // 2, 'player': 2, 'move_direction': 'none'}]
 
     for paddle in paddles:
         color = PLAYER_1_COLOR if paddle['player'] == 1 else PLAYER_2_COLOR
@@ -234,15 +256,23 @@ def ball_collided_with_paddle(ball, paddle):
     return collision
 
 
+def player_missed(player, canvas, game_state):
+    scores = game_state['scores']
+    score = list(filter(lambda x:x['player']==player, scores))[0]
+    score['lives'] -= 1
+    canvas.delete(score['item'])
+    score['item'] = create_score_for_player(player, canvas, score['lives'])
+
+
 def check_ball_bounds(ball, game_state, canvas):
     barriers = game_state['barriers']
     paddles = game_state['paddles']
-    if ball['y'] < BALL_RADIUS:
+    if ball['y'] < PLAY_AREA_TOP + BALL_RADIUS:
         ball['y_step'] *= -1
-        ball['y'] = BALL_RADIUS
-    if ball['y'] > CANVAS_HEIGHT - BALL_RADIUS:
+        ball['y'] = PLAY_AREA_TOP + BALL_RADIUS
+    if ball['y'] > PLAY_AREA_BOTTOM - BALL_RADIUS:
         ball['y_step'] *= -1
-        ball['y'] = CANVAS_HEIGHT - BALL_RADIUS
+        ball['y'] = PLAY_AREA_BOTTOM - BALL_RADIUS
     for barrier in barriers:
         if ball_collided_with_barrier(ball, barrier):
             break
@@ -250,7 +280,16 @@ def check_ball_bounds(ball, game_state, canvas):
         if ball_collided_with_paddle(ball, paddle):
             break
 
-    if ball['x'] + BALL_RADIUS > CANVAS_WIDTH or ball['x'] - BALL_RADIUS < 0:
+    ball_missed = False
+    if ball['x'] + BALL_RADIUS > PLAY_AREA_RIGHT:
+        player_missed(2, canvas, game_state)
+        ball_missed = True
+
+    if ball['x'] - BALL_RADIUS < PLAY_AREA_LEFT:
+        player_missed(1, canvas, game_state)
+        ball_missed = True
+
+    if ball_missed:
         canvas.delete(ball['item'])
         initialize_ball(ball, canvas)
 
@@ -267,11 +306,15 @@ def update_balls(canvas, game_state):
     return
 
 
+def update_header(canvas, game_state):
+    return
+
 def drawFrame(canvas, game_state):
     # update world
     update_paddles(canvas, game_state)
     update_barriers(canvas, game_state)
     update_balls(canvas, game_state)
+    update_header(canvas, game_state)
 
     canvas.update()
 
