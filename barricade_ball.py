@@ -107,7 +107,7 @@ def create_score_for_player(player, canvas, lives):
 
 
 def initialize_header(canvas):
-    scores = [{'player':1, 'lives':10},{'player':2, 'lives':10}]
+    scores = [{'player': 1, 'lives': 10}, {'player': 2, 'lives': 10}]
     canvas.create_line(PLAY_AREA_LEFT, PLAY_AREA_TOP, PLAY_AREA_RIGHT, PLAY_AREA_TOP, fill='#101010')
     for score in scores:
         player = score['player']
@@ -129,6 +129,11 @@ def new_ball_direction(player):
     return {'x_step': x_step, 'y_step': y_step}
 
 
+def set_ball_color(ball, canvas):
+    color = BALL_COLOR_PLAYER_1 if ball['player'] == 1 else BALL_COLOR_PLAYER_2
+    canvas.itemconfig(ball['item'], fill=color, outline=color)
+
+
 def initialize_ball(ball, canvas):
     player = ball['player']
     ball_direction = new_ball_direction(player)
@@ -141,9 +146,9 @@ def initialize_ball(ball, canvas):
     ball['x_step'] = ball_direction['x_step']
     ball['y_step'] = ball_direction['y_step']
 
-    color = BALL_COLOR_PLAYER_1 if ball['player'] == 1 else BALL_COLOR_PLAYER_2
     ball['item'] = canvas.create_oval(ball['x'] - BALL_RADIUS, ball['y'] - BALL_RADIUS, ball['x'] + BALL_RADIUS,
-                                      ball['y'] + BALL_RADIUS, fill=color, outline=color)
+                                      ball['y'] + BALL_RADIUS)
+    set_ball_color(ball, canvas)
 
 
 def initialize_balls(canvas):
@@ -173,6 +178,7 @@ def initialize_barriers(canvas):
         color = PLAYER_1_COLOR if barrier['player'] == 1 else PLAYER_2_COLOR
         barrier['item'] = canvas.create_rectangle(barrier['x1'], barrier['y1'], barrier['x2'], barrier['y2'],
                                                   fill=color, outline=color)
+        barrier['active'] = True
 
     return barriers
 
@@ -220,45 +226,62 @@ def update_barriers(canvas, game_state):
     return
 
 
-def ball_collided_with_barrier(ball, barrier):
+def ball_overlaps_barrier(ball, barrier):
+    if not barrier['active']: return False
+    overlaps = False
+
+    if ball['x'] + BALL_RADIUS > barrier['x1'] and ball['x'] - BALL_RADIUS < barrier['x2'] and ball['y'] + BALL_RADIUS > \
+            barrier['y1'] and ball['y'] - BALL_RADIUS < barrier['y2']:
+        overlaps = True
+    return overlaps
+
+
+def ball_collided_with_barrier(ball, barrier, canvas):
+    """
+    If the ball overlaps with a barrier AND the ball and barrier are for the same player the barrier is destroyed and
+    the ball bounces back.
+    If the ball overlaps with a barrier that is for the other player, the ball keeps going
+    :param ball:
+    :param barrier:
+    :param canvas:
+    :return:
+    """
     collision = False
-    if ball['player'] == 1:
-        if ball['x'] > barrier['x1'] - BALL_RADIUS:
-            ball['x_step'] *= -1
-            ball['x'] = barrier['x1'] - BALL_RADIUS
-            collision = True
-    if ball['player'] == 2:
-        if ball['x'] < barrier['x2'] + BALL_RADIUS:
-            ball['x_step'] *= -1
-            ball['x'] = barrier['x2'] + BALL_RADIUS
-            collision = True
+    if ball['player'] == barrier['player'] and ball_overlaps_barrier(ball, barrier):
+        ball['x_step'] *= -1
+        canvas.delete(barrier['item'])
+        barrier['active'] = False
+        collision = True
     return collision
+
+
+def ball_overlaps_paddle(ball, paddle):
+    overlaps = False
+    px1 = paddle['x'] - PADDLE_WIDTH // 2
+    px2 = paddle['x'] + PADDLE_WIDTH // 2
+    py1 = paddle['y'] - PADDLE_HEIGHT // 2
+    py2 = paddle['y'] + PADDLE_HEIGHT // 2
+
+    if ball['x'] + BALL_RADIUS > px1 and ball['x'] - BALL_RADIUS < px2 and ball['y'] + BALL_RADIUS > \
+            py1 and ball['y'] - BALL_RADIUS < py2:
+        overlaps = True
+    return overlaps
 
 
 def ball_collided_with_paddle(ball, paddle):
     collision = False
-    y_overlap = ball['y'] + BALL_RADIUS > paddle['y'] - PADDLE_HEIGHT // 2 and ball['y'] - BALL_RADIUS < paddle[
-        'y'] + PADDLE_HEIGHT // 2
 
-    if paddle['player'] == 1:
-        x_overlap = ball['x'] < paddle['x'] + PADDLE_WIDTH + BALL_RADIUS
-        if x_overlap and y_overlap:
-            ball['x_step'] *= -1
-            ball['x'] = paddle['x'] + PADDLE_WIDTH + BALL_RADIUS
-            collision = True
-    if paddle['player'] == 2:
-        x_overlap = ball['x'] > paddle['x'] - BALL_RADIUS
-        if x_overlap and y_overlap:
-            ball['x_step'] *= -1
-            ball['x'] = paddle['x'] - BALL_RADIUS
-            collision = True
+    if ball_overlaps_paddle(ball, paddle):
+        ball['x_step'] *= -1
+        ball['player'] = paddle['player']
+        collision = True
 
     return collision
 
 
 def player_missed(player, canvas, game_state):
     scores = game_state['scores']
-    score = list(filter(lambda x:x['player']==player, scores))[0]
+    score = list(filter(lambda x: x['player'] == player, scores))[0]
     score['lives'] -= 1
     canvas.delete(score['item'])
     score['item'] = create_score_for_player(player, canvas, score['lives'])
@@ -274,10 +297,11 @@ def check_ball_bounds(ball, game_state, canvas):
         ball['y_step'] *= -1
         ball['y'] = PLAY_AREA_BOTTOM - BALL_RADIUS
     for barrier in barriers:
-        if ball_collided_with_barrier(ball, barrier):
+        if ball_collided_with_barrier(ball, barrier, canvas):
             break
     for paddle in paddles:
         if ball_collided_with_paddle(ball, paddle):
+            set_ball_color(ball, canvas)
             break
 
     ball_missed = False
@@ -308,6 +332,7 @@ def update_balls(canvas, game_state):
 
 def update_header(canvas, game_state):
     return
+
 
 def drawFrame(canvas, game_state):
     # update world
